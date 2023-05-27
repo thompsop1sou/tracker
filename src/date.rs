@@ -1,7 +1,7 @@
 use chrono::Local;
 use std::fmt;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Date {
     year: u16,
     month: u16,
@@ -14,6 +14,7 @@ impl fmt::Display for Date {
     }
 }
 
+// Public methods
 impl Date {
     // Create a new Date with default values (year: 2000, month: 1, day: 1)
     pub fn new() -> Date {
@@ -29,27 +30,15 @@ impl Date {
     // Create a new Date from integer arguments for year, month, and day
     pub fn new_from_ints(year: u16, month: u16, day: u16) -> Result<Date, &'static str> {
         let mut date = Date::new();
-        date.set_from_ints(year, month, day)?;
+        date.set_year(year)?;
+        date.set_month(month)?;
+        date.set_day(day)?;
         Ok(date)
     }
 
     // Create a new Date from a string argument formatted like "year-month-day"
     pub fn new_from_string(date_str: &str) -> Result<Date, &'static str> {
         let mut date = Date::new();
-        date.set_from_string(date_str)?;
-        Ok(date)
-    }
-
-    // Set this Date from integer arguments for year, month, and day
-    pub fn set_from_ints(self: &mut Self, year: u16, month: u16, day: u16) -> Result<(), &'static str> {
-        self.set_year(year)?;
-        self.set_month(month)?;
-        self.set_day(day)?;
-        Ok(())
-    }
-
-    // Set this Date from a string argument formatted like "year-month-day"
-    pub fn set_from_string(self: &mut Self, date_str: &str) -> Result<(), &'static str> {
         let parts: Vec<&str> = date_str.split("-").collect();
         if parts.len() == 3 {
             let year: u16;
@@ -67,10 +56,33 @@ impl Date {
                 Ok(x) => day = x,
                 Err(_) => return Err("Date parse error: cannot parse day"),
             }
-            self.set_from_ints(year, month, day)
+            date.set_year(year)?;
+            date.set_month(month)?;
+            date.set_day(day)?;
+            Ok(date)
         } else {
             Err("Date parse error: incorrect number of seperators")
         }
+    }
+
+    // Set this Date from integer arguments for year, month, and day
+    // If there is an error, this Date will not be changed
+    pub fn set_from_ints(self: &mut Self, year: u16, month: u16, day: u16) -> Result<(), &'static str> {
+        let date = Date::new_from_ints(year, month, day)?;
+        self.year = date.year;
+        self.month = date.month;
+        self.day = date.day;
+        Ok(())
+    }
+
+    // Set this Date from a string argument formatted like "year-month-day"
+    // If there is an error, this Date will not be changed
+    pub fn set_from_string(self: &mut Self, date_str: &str) -> Result<(), &'static str> {
+        let date = Date::new_from_string(date_str)?;
+        self.year = date.year;
+        self.month = date.month;
+        self.day = date.day;
+        Ok(())
     }
 
     // Get a string representation of this Date
@@ -81,6 +93,71 @@ impl Date {
     // Get a tuple representation of this Date
     pub fn to_tuple(self: &Self) -> (u16, u16, u16) {
         (self.year, self.month, self.day)
+    }
+
+    // Add a certain number of days to this Date and return the result
+    pub fn add_days(self: &Self, days: u16) -> Result<Date, &str> {
+        let mut new_date = self.clone();
+        let mut days_to_add = days;
+        // Keep moving through the months until days_to_add is small enough
+        let mut days_this_month = new_date.days_this_month() - new_date.day;
+        while days_to_add > days_this_month {
+            days_to_add -= days_this_month + 1;
+            if new_date.month == 12 {
+                new_date.month = 1;
+                if new_date.year == std::u16::MAX {
+                    return Err("Add days error: year went above max (65535)");
+                } else {
+                    new_date.year += 1;
+                }
+            } else {
+                new_date.month += 1;
+            }
+            new_date.day = 1;
+            days_this_month = new_date.days_this_month() - new_date.day;
+        }
+        // Finally, days_to_add is small enough and we will stay in this month
+        new_date.day += days_to_add;
+        Ok(new_date)
+    }
+
+    // Subtract a certain number of days from this Date and return the result
+    pub fn sub_days(self: &Self, days: u16) -> Result<Date, &str> {
+        let mut new_date = self.clone();
+        let mut days_to_sub = days;
+        // Keep moving through the months until days_to_sub is small enough
+        while days_to_sub >= new_date.day {
+            days_to_sub -= new_date.day;
+            if new_date.month == 1 {
+                new_date.month = 12;
+                if new_date.year == 0 {
+                    return Err("Subtract days error: year went below min (0)");
+                } else {
+                    new_date.year -= 1;
+                }
+            } else {
+                new_date.month -= 1;
+            }
+            new_date.day = new_date.days_this_month();
+        }
+        // Finally, days_to_sub is small enough and we will stay in this month
+        new_date.day -= days_to_sub;
+        Ok(new_date)
+    }
+}
+
+// Private methods
+impl Date {
+    fn is_leap_year(self: &Self) -> bool {
+        self.year % 4 == 0 && !(self.year % 100 == 0 && !(self.year % 400 == 0))
+    }
+
+    fn days_this_month(self: &Self) -> u16 {
+        match self.month {
+            4 | 6 | 9 | 11 =>  30,
+            2 => if self.is_leap_year() {29} else {28},
+            _ => 31,
+        }
     }
 
     fn set_year(self: &mut Self, year: u16) -> Result<(), &'static str> {
@@ -100,17 +177,9 @@ impl Date {
     }
 
     fn set_day(self: &mut Self, day: u16) -> Result<(), &'static str> {
-        let is_leap_year = self.year % 4 == 0 && !(self.year % 100 == 0 && !(self.year % 400 == 0));
-    
-        let days_in_month = match self.month {
-            4 | 6 | 9 | 11 =>  30,
-            2 => if is_leap_year {29} else {28},
-            _ => 31,
-        };
-    
         if day < 1 {
             Err("Set date error: day too small")
-        } else if day > days_in_month {
+        } else if day > self.days_this_month() {
             Err("Set date error: day too large")
         } else {
             self.day = day;
@@ -185,5 +254,25 @@ mod tests {
         assert_eq!(date.set_from_ints(2004, 2, 30), Err("Set date error: day too large"));
         assert_eq!(date.set_from_ints(2100, 2, 28), Ok(()));
         assert_eq!(date.set_from_ints(2100, 2, 29), Err("Set date error: day too large"));
+    }
+
+    #[test]
+    fn add_sub_days() {
+        let mut date = Date::new();
+        assert_eq!(date.to_tuple(), (2000, 1, 1));
+        date = date.add_days(1).unwrap();
+        assert_eq!(date.to_tuple(), (2000, 1, 2));
+        date = date.sub_days(1).unwrap();
+        assert_eq!(date.to_tuple(), (2000, 1, 1));
+        date = date.add_days(31).unwrap();
+        assert_eq!(date.to_tuple(), (2000, 2, 1));
+        date = date.sub_days(32).unwrap();
+        assert_eq!(date.to_tuple(), (1999, 12, 31));
+        date = date.add_days(100).unwrap();
+        assert_eq!(date.to_tuple(), (2000, 4, 9));
+        date.set_from_ints(std::u16::MAX, 12, 31).unwrap();
+        assert_eq!(date.add_days(1), Err("Add days error: year went above max (65535)"));
+        date.set_from_ints(0, 1, 1).unwrap();
+        assert_eq!(date.sub_days(1), Err("Subtract days error: year went below min (0)"));
     }
 }
