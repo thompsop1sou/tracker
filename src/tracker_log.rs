@@ -73,6 +73,26 @@ impl TrackerLog {
         }
         Ok(())
     }
+
+    pub fn add_category(self: &mut Self, other_args: Vec<String>) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub fn delete_category(self: &mut Self, other_args: Vec<String>) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub fn add_log(self: &mut Self, other_args: Vec<String>) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub fn delete_log(self: &mut Self, other_args: Vec<String>) -> Result<(), String> {
+        Ok(())
+    }
+
+    pub fn summarize(self: &Self, other_args: Vec<String>) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 // Private Methods
