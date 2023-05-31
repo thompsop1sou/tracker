@@ -27,7 +27,7 @@ impl TrackerData {
             Ok(mut file) => {
                 match file.read_to_string(&mut contents) {
                     Ok(_) => {}
-                    Err(_) => {return Err(format!("Something went wrong reading from \"{filename}\"..."));}
+                    Err(_) => {return Err(format!("Load from file error: cannot read \"{filename}\""));}
                 }
             },
             Err(_) => {}
@@ -42,7 +42,7 @@ impl TrackerData {
                     parsed = p;
                 }
                 Err(_) => {
-                    return Err(format!("Something went wrong parsing the contents of \"{filename}\"..."));
+                    return Err(format!("Load from file error: cannot parse contents of \"{filename}\""));
                 }
             }
         }
@@ -51,7 +51,6 @@ impl TrackerData {
             Ok(_) => (),
             Err(_) => (), // Error can be ignored, just means there was no data in parsed
         }
-        println!("loaded the file");
         Ok(())
     }
 
@@ -65,15 +64,14 @@ impl TrackerData {
                 match file.write_all(tracker_json.pretty(4).as_bytes()) {
                     Ok(_) => {}
                     Err(_) => {
-                        return Err(format!("Something went wrong writing to \"{filename}\"..."));
+                        return Err(format!("Save to file error: cannot write to \"{filename}\""));
                     }
                 }
             }
             Err(_) => {
-                return Err(format!("Something went wrong creating \"{filename}\"..."));
+                return Err(format!("Save to file error: cannot open \"{filename}\""));
             }
         }
-        println!("saved the file");
         Ok(())
     }
 
@@ -123,7 +121,7 @@ impl TrackerData {
         }
         // Check to make sure we actually got some new data
         if new_data.is_empty() {
-            Err(String::from("Something went wrong filling the tracker data from the JSON..."))
+            Err(String::from("From JSON error: JSON cannot be interpreted as TrackerData"))
         } else {
             self.data = new_data;
             Ok(())
@@ -142,7 +140,7 @@ impl TrackerData {
                 match activities_json.insert(&activity, *duration) {
                     Ok(_) => {}
                     Err(_) => {
-                        return Err(String::from("Something went wrong creating the JSON of the tracker data..."))
+                        return Err(String::from("To JSON error: TrackerData cannot be interpreted as JSON"))
                     }
                 }
             }
@@ -150,7 +148,7 @@ impl TrackerData {
             match tracker_json.insert(&date_string, activities_json) {
                 Ok(_) => {}
                 Err(_) => {
-                    return Err(String::from("Something went wrong creating the JSON of the tracker data..."))
+                    return Err(String::from("To JSON error: TrackerData cannot be interpreted as JSON"))
                 }
             }
         }
