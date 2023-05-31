@@ -1,20 +1,14 @@
 use chrono::Local;
-use std::fmt;
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
+// Struct Definition
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct Date {
     year: u16,
     month: u16,
     day: u16,
 }
 
-impl fmt::Display for Date {
-    fn fmt(self: &Self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}-{}-{}", self.year, self.month, self.day)
-    }
-}
-
-// Public methods
+// Public Methods
 impl Date {
     // Create a new Date with default values (year: 2000, month: 1, day: 1)
     pub fn new() -> Date {
@@ -146,7 +140,7 @@ impl Date {
     }
 }
 
-// Private methods
+// Private Methods
 impl Date {
     fn is_leap_year(self: &Self) -> bool {
         self.year % 4 == 0 && !(self.year % 100 == 0 && !(self.year % 400 == 0))
