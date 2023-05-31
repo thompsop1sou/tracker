@@ -1,6 +1,7 @@
 use std::env;
 use std::process;
-use time_tracker::tracker_data::TrackerData;
+use tracker::tracker_data::TrackerData;
+use tracker::date::Date;
 
 fn main() {
     // Open the JSON file and load into the tracker data
@@ -25,25 +26,49 @@ fn main() {
     match func_arg {
         // Add time to an activity
         "add" => {
-            tracker_data.add(other_args)
-                .unwrap_or_else(|e| print_error_and_exit(&e));
+            // Parse the arguments
+            let (date, activity, minutes) = parse_add_sub_args(other_args).unwrap_or_else(|e| {
+                print_error_and_exit(&e);
+                (Date::new(), String::new(), 0)
+            });
+            // Call the add method on tracker_data
+            tracker_data.add(date, activity, minutes).unwrap_or_else(|e| {
+                print_error_and_exit(&e);
+            });
         }
         // Remove time from an activity
         "sub" => {
-            tracker_data.subtract(other_args)
-                .unwrap_or_else(|e| print_error_and_exit(&e));
+            // Parse the arguments
+            let (date, activity, minutes) = parse_add_sub_args(other_args).unwrap_or_else(|e| {
+                print_error_and_exit(&e);
+                (Date::new(), String::new(), 0)
+            });
+            // Call the subtract method on tracker_data
+            tracker_data.subtract(date, activity, minutes).unwrap_or_else(|e| {
+                print_error_and_exit(&e);
+            });
         }
         // Print a summary of a date range
         "sum" => {
-            let summary = tracker_data.summarize(other_args).unwrap_or_else(|e| {
+            // Parse the arguments
+            let (start_date, end_date) = parse_sum_args(other_args).unwrap_or_else(|e| {
+                print_error_and_exit(&e);
+                (Date::new(), Date::new())
+            });
+            // Call the summarize method on tracker_data
+            let summary = tracker_data.summarize(start_date, end_date).unwrap_or_else(|e| {
                 print_error_and_exit(&e);
                 String::new()
             });
             println!("{}", summary);
         }
+        // Asking for help, print out instructions
+        "?" | "/?" | "--help" | "help" => {
+            print_instructions();
+        }
         // Invalid command line arguments, print instructions
-        _ => {
-            print_instr_and_exit();
+        c => {
+            print_error_and_exit(&format!("Parse arguments error: \"{c}\" not a valid command (use \"help\" to see a list of valid commands)"))
         }
     }
 
@@ -52,20 +77,69 @@ fn main() {
         .unwrap_or_else(|e| print_error_and_exit(&e));
 }
 
-// Function prints the error message to standard error and then exits the process
+// Parse arguments into values needed for add and sub commands
+fn parse_add_sub_args(other_args: Vec<String>) -> Result<(Date, String, u16), String> {
+    let date: Date;
+    let activity: String;
+    let minutes: u16;
+    if other_args.len() >= 3 {
+        match Date::new_from_string(&other_args[0]) {
+            Ok(d) => date = d,
+            Err(_) => return Err(format!("Parse arguments error: \"{}\" cannot be interpreted as a date", other_args[0])),
+        }
+        activity = other_args[1].clone();
+        match other_args[2].parse::<u16>() {
+            Ok(m) => minutes = m,
+            Err(_) => return Err(format!("Parse arguments error: \"{}\" cannot be interpreted as an integer", other_args[2])),
+        }
+    } else {
+        return Err(String::from("Parse arguments error: not enough arguments for \"add\" or \"sub\" command"));
+    }
+    Ok((date, activity, minutes))
+}
+
+// Parse arguments into values needed for sum command
+fn parse_sum_args(other_args: Vec<String>) -> Result<(Date, Date), String> {
+    let start_date: Date;
+    let end_date: Date;
+    match other_args.len() {
+        0 => {
+            return Err(String::from("Parse arguments error: not enough arguments for \"sum\" command"));
+        }
+        1 => {
+            match Date::new_from_string(&other_args[0]) {
+                Ok(d) => start_date = d,
+                Err(_) => return Err(format!("Parse arguments error: \"{}\" cannot be interpreted as a date", other_args[0])),
+            }
+            end_date = start_date.clone();
+        }
+        _ => {
+            match Date::new_from_string(&other_args[0]) {
+                Ok(d) => start_date = d,
+                Err(_) => return Err(format!("Parse arguments error: \"{}\" cannot be interpreted as a date", other_args[0])),
+            }
+            match Date::new_from_string(&other_args[1]) {
+                Ok(d) => end_date = d,
+                Err(_) => return Err(format!("Parse arguments error: \"{}\" cannot be interpreted as a date", other_args[1])),
+            }
+        }
+    }
+    Ok((start_date, end_date))
+}
+
+// Print the error message to standard error and exit the process
 fn print_error_and_exit(error_msg: &str) {
     eprintln!("{}", error_msg);
     process::exit(1);
 }
 
-// Function prints the instructions to standard error and then exits the process
-fn print_instr_and_exit() {
+// Print the instructions to standard output
+fn print_instructions() {
     let mut instr = String::new();
-    instr.push_str("Please enter a valid command:\n");
-    instr.push_str("    add time to an activity         \"add <date> <activity> <minutes>\"\n");
-    instr.push_str("    subtract time from an activity  \"sub <date> <activity> <minutes>\"\n");
-    instr.push_str("    print summary of a date         \"sum <date>\"");
-    instr.push_str("    print summary of a date range   \"sum <start_date> <end_date>\"");
-    eprintln!("{}", instr);
-    process::exit(1);
+    instr.push_str("COMMAND <ARGUMENT>                 DESCRIPTION\n");
+    instr.push_str("add <date> <activity> <minutes>    add minutes to an activity on a date\n");
+    instr.push_str("sub <date> <activity> <minutes>    subtract minutes from an activity on a date\n");
+    instr.push_str("sum <date>                         print summary of activities on a date\n");
+    instr.push_str("sum <start_date> <end_date>        print summary of activities from start date to end date");
+    println!("{}", instr);
 }

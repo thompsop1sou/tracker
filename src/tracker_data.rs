@@ -47,10 +47,7 @@ impl TrackerData {
             }
         }
         // Use the JsonValue object to populate this TrackerData struct
-        match self.from_json(&parsed) {
-            Ok(_) => (),
-            Err(_) => (), // Error can be ignored, just means there was no data in parsed
-        }
+        self.from_json(&parsed).unwrap_or_else(|_| {});
         Ok(())
     }
 
@@ -76,151 +73,98 @@ impl TrackerData {
     }
 
     // Adds minutes to an activity on a date
-    pub fn add(self: &mut Self, args: Vec<String>) -> Result<(), String> {
-        // If we have the correct number of arguments...
-        if args.len() == 3 {
-            // Parse the arguments
-            let date = Date::new_from_string(&args[0])?;
-            let activity = args[1].clone();
-            let minutes: u16;
-            match args[2].parse::<u16>() {
-                Ok(m) => minutes = m,
-                Err(_) => return Err(String::from("Add activity error: minutes argument cannot be interpreted as number")),
-            }
-            // If we already have the date, update the data
-            if self.data.contains_key(&date) {
-                let mut activities = self.data[&date].clone();
-                if self.data[&date].contains_key(&activity) {
-                    let total_minutes = self.data[&date][&activity] + minutes;
-                    activities.insert(activity, total_minutes);
-                } else {
-                    activities.insert(activity, minutes);
+    pub fn add(self: &mut Self, date: Date, activity: String, minutes: u16) -> Result<(), String> {
+        // If we already have the date, update the data
+        if self.data.contains_key(&date) {
+            let mut activities = self.data[&date].clone();
+            if self.data[&date].contains_key(&activity) {
+                let total_minutes = self.data[&date][&activity] + minutes;
+                if total_minutes > 60 * 24 {
+                    return Err(format!("Add error: total minutes exceeds 1,440 for {} on {}", activity, date.to_string()));
                 }
-                self.data.insert(date, activities);
-            // If we don't already have the date, create the data
+                activities.insert(activity, total_minutes);
             } else {
-                let mut activities: HashMap<String, u16> = HashMap::new();
                 activities.insert(activity, minutes);
-                self.data.insert(date, activities);
             }
-            Ok(())
-        // If we don't have the correct number of arguments...
+            self.data.insert(date, activities);
+        // If we don't already have the date, create the data
         } else {
-            Err(String::from("Add activity error: incorrect number of arguments"))
+            let mut activities: HashMap<String, u16> = HashMap::new();
+            activities.insert(activity, minutes);
+            self.data.insert(date, activities);
         }
+        Ok(())
     }
 
     // Subtracts minutes from an activity on a date
-    pub fn subtract(self: &mut Self, args: Vec<String>) -> Result<(), String> {
-        // If we have the correct number of arguments...
-        if args.len() == 3 {
-            // Parse the arguments
-            let date = Date::new_from_string(&args[0])?;
-            let activity = args[1].clone();
-            let minutes: u16;
-            match args[2].parse::<u16>() {
-                Ok(m) => minutes = m,
-                Err(_) => return Err(String::from("Subtract activity error: minutes argument cannot be interpreted as number")),
-            }
-            // If we already have the date, update the data
-            if self.data.contains_key(&date) {
-                // If we already have the activity, update the data
-                if self.data[&date].contains_key(&activity) {
-                    let mut activities = self.data[&date].clone();
-                    if minutes < self.data[&date][&activity] {
-                        let total_minutes = self.data[&date][&activity] - minutes;
-                        activities.insert(activity, total_minutes);
-                    } else {
-                        activities.remove(&activity);
-                    }
-                    if activities.is_empty() {
-                        self.data.remove(&date);
-                    } else {
-                        self.data.insert(date, activities);
-                    }
-                // If we don't already have the activity, let the user know
+    pub fn subtract(self: &mut Self, date: Date, activity: String, minutes: u16) -> Result<(), String> {
+        // If we already have the date, update the data
+        if self.data.contains_key(&date) {
+            // If we already have the activity, update the data
+            if self.data[&date].contains_key(&activity) {
+                let mut activities = self.data[&date].clone();
+                if minutes < self.data[&date][&activity] {
+                    let total_minutes = self.data[&date][&activity] - minutes;
+                    activities.insert(activity, total_minutes);
                 } else {
-                    return Err(String::from("Subtract activity error: no minutes recorded for that activity on that date"));
+                    activities.remove(&activity);
                 }
-            // If we don't already have the date, let the user know
+                if activities.is_empty() {
+                    self.data.remove(&date);
+                } else {
+                    self.data.insert(date, activities);
+                }
+            // If we don't already have the activity, let the user know
             } else {
-                return Err(String::from("Subtract activity error: no activities recorded for that date"));
+                return Err(format!("Subtract error: no minutes recorded for {} on that {}", activity, date.to_string()));
             }
-            Ok(())
-        // If we don't have the correct number of arguments...
+        // If we don't already have the date, let the user know
         } else {
-            Err(String::from("Subtract activity error: incorrect number of arguments"))
+            return Err(format!("Subtract error: no activities recorded for {}", date.to_string()));
         }
+        Ok(())
     }
 
     // Returns a summary (as a String) of the activities for a given date or date range
-    pub fn summarize(self: &Self, args: Vec<String>) -> Result<String, String> {
-        // If we only have one date...
-        if args.len() == 1{
-            // Parse the argument
-            let date = Date::new_from_string(&args[0])?;
-            // If there is data for that date, return a string representing that data
-            if self.data.contains_key(&date) && !self.data[&date].is_empty() {
-                let mut summary = format!("ACTIVITY\tTOTAL TIME\n");
-                for (activity, minutes) in &self.data[&date] {
-                    let line: String;
-                    if activity.len() < 8 {
-                        line = format!("{activity}\t\t{minutes}\n");
+    pub fn summarize(self: &Self, start_date: Date, end_date: Date) -> Result<String, String> {
+        // Make sure start_date is before end_date
+        if end_date < start_date {
+            return Err(format!("Summarize error: end date {} is before start date {}", end_date.to_string(), start_date.to_string()));
+        }
+        // Collect the data from those dates
+        let mut num_days: u16 = 0;
+        let mut activities: HashMap<String, u16> = HashMap::new();
+        let mut curr_date = start_date.clone();
+        while curr_date <= end_date {
+            if self.data.contains_key(&curr_date) {
+                for (activity, minutes) in &self.data[&curr_date] {
+                    if activities.contains_key(activity) {
+                        activities.insert(activity.clone(), activities[activity] + *minutes);
                     } else {
-                        line = format!("{activity}\t{minutes}\n");
+                        activities.insert(activity.clone(), *minutes);
                     }
-                    summary.push_str(&line);
                 }
-                Ok(summary.trim_end_matches("\n").to_string())
-            // If there is not data for that date, return a string indicating that
-            } else {
-                Ok(format!("There is no data for {}", date.to_string()))
+                num_days += 1;
             }
-        // If we have two dates (for a range)...
-        } else if args.len() == 2 {
-            // Parse the arguments
-            let start_date = Date::new_from_string(&args[0])?;
-            let end_date = Date::new_from_string(&args[1])?;
-            if start_date > end_date {
-                return Err(String::from("Summarize error: end date is before start date"));
-            }
-            // Collect the data from those dates
-            let mut num_days: u16 = 0;
-            let mut activities: HashMap<String, u16> = HashMap::new();
-            let mut curr_date = start_date.clone();
-            while curr_date <= end_date {
-                if self.data.contains_key(&curr_date) {
-                    for (activity, minutes) in &self.data[&curr_date] {
-                        if activities.contains_key(activity) {
-                            activities.insert(activity.clone(), activities[activity] + *minutes);
-                        } else {
-                            activities.insert(activity.clone(), *minutes);
-                        }
-                    }
-                    num_days += 1;
+            curr_date = curr_date.add_days(1).unwrap();
+        }
+        // If there is data for those dates, return a string representing that data
+        if !activities.is_empty() {
+            let mut summary = format!("Summary from {} to {}:\n\n", start_date.to_string(), end_date.to_string());
+            summary.push_str("ACTIVITY\tTOTAL TIME\tAVG TIME\n");
+            for (activity, minutes) in activities {
+                let line: String;
+                if activity.len() < 8 {
+                    line = format!("{}\t\t{}\t\t{}\n", activity, minutes, minutes/num_days);
+                } else {
+                    line = format!("{}\t{}\t\t{}\n", activity, minutes, minutes/num_days);
                 }
-                curr_date = curr_date.add_days(1).unwrap();
+                summary.push_str(&line);
             }
-            // If there is data for those dates, return a string representing that data
-            if !activities.is_empty() {
-                let mut summary = format!("ACTIVITY\tTOTAL TIME\tAVG TIME\n");
-                for (activity, minutes) in activities {
-                    let line: String;
-                    if activity.len() < 8 {
-                        line = format!("{}\t\t{}\t\t{}\n", activity, minutes, minutes/num_days);
-                    } else {
-                        line = format!("{}\t{}\t\t{}\n", activity, minutes, minutes/num_days);
-                    }
-                    summary.push_str(&line);
-                }
-                Ok(summary.trim_end_matches("\n").to_string())
-            // If there is not data for those dates, return a string indicating that
-            } else {
-                Ok(format!("There is no data for {} to {}", start_date.to_string(), end_date.to_string()))
-            }
-        // If we don't have the correct number of arguments...
+            Ok(summary.trim_end_matches("\n").to_string())
+        // If there is not data for those dates, return an error indicating that
         } else {
-            Err(String::from("Summarize error: incorrect number of arguments"))
+            Err(format!("Summarize error: no data for {} to {}", start_date.to_string(), end_date.to_string()))
         }
     }
 }
