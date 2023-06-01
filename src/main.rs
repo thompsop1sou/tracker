@@ -63,7 +63,7 @@ fn main() {
             println!("{}", summary);
         }
         // Asking for help, print out instructions
-        "?" | "/?" | "--help" | "help" => {
+        "help" => {
             print_instructions();
         }
         // Invalid function argument, print instructions
@@ -143,7 +143,7 @@ fn print_instructions() {
     instr.push_str("sum <date>                         print summary of activities on a date\n");
     instr.push_str("sum <start_date> <end_date>        print summary of activities from start date to end date\n");
     instr.push_str("\nNote: Date arguments should use one of the following formats:\n");
-    instr.push_str("    <year>-<month>-<day> (e.g. 2023-5-31)\n");
+    instr.push_str("    <year>-<month>-<day> (a date literal, such as 2023-5-31)\n");
     instr.push_str("    today (gives today's date)\n");
     instr.push_str("    today-<n> (gives a date n days before today)\n");
     instr.push_str("    today+<n> (gives a date n days after today)");
