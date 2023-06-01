@@ -66,9 +66,9 @@ fn main() {
         "?" | "/?" | "--help" | "help" => {
             print_instructions();
         }
-        // Invalid command line arguments, print instructions
+        // Invalid function argument, print instructions
         c => {
-            print_error_and_exit(&format!("Parse arguments error: \"{c}\" not a valid command (use \"help\" to see a list of valid commands)"))
+            print_error_and_exit(&format!("Parse arguments error: \"{c}\" not a valid function (use \"help\" to see a list of valid functions)"))
         }
     }
 
@@ -77,7 +77,7 @@ fn main() {
         .unwrap_or_else(|e| print_error_and_exit(&e));
 }
 
-// Parse arguments into values needed for add and sub commands
+// Parse arguments into values needed for add and sub functions
 fn parse_add_sub_args(other_args: Vec<String>) -> Result<(Date, String, u16), String> {
     let date: Date;
     let activity: String;
@@ -93,18 +93,18 @@ fn parse_add_sub_args(other_args: Vec<String>) -> Result<(Date, String, u16), St
             Err(_) => return Err(format!("Parse arguments error: \"{}\" cannot be interpreted as an integer", other_args[2])),
         }
     } else {
-        return Err(String::from("Parse arguments error: not enough arguments for \"add\" or \"sub\" command"));
+        return Err(String::from("Parse arguments error: not enough arguments for \"add\" or \"sub\" function"));
     }
     Ok((date, activity, minutes))
 }
 
-// Parse arguments into values needed for sum command
+// Parse arguments into values needed for sum function
 fn parse_sum_args(other_args: Vec<String>) -> Result<(Date, Date), String> {
     let start_date: Date;
     let end_date: Date;
     match other_args.len() {
         0 => {
-            return Err(String::from("Parse arguments error: not enough arguments for \"sum\" command"));
+            return Err(String::from("Parse arguments error: not enough arguments for \"sum\" function"));
         }
         1 => {
             match Date::new_from_string(&other_args[0]) {
@@ -136,10 +136,16 @@ fn print_error_and_exit(error_msg: &str) {
 // Print the instructions to standard output
 fn print_instructions() {
     let mut instr = String::new();
-    instr.push_str("COMMAND <ARGUMENT>                 DESCRIPTION\n");
+    instr.push_str("Valid tracker functions:\n\n");
+    instr.push_str("FUNCTION <ARGUMENT>                DESCRIPTION\n");
     instr.push_str("add <date> <activity> <minutes>    add minutes to an activity on a date\n");
     instr.push_str("sub <date> <activity> <minutes>    subtract minutes from an activity on a date\n");
     instr.push_str("sum <date>                         print summary of activities on a date\n");
-    instr.push_str("sum <start_date> <end_date>        print summary of activities from start date to end date");
+    instr.push_str("sum <start_date> <end_date>        print summary of activities from start date to end date\n");
+    instr.push_str("\nNote: Date arguments should use one of the following formats:\n");
+    instr.push_str("    <year>-<month>-<day> (e.g. 2023-5-31)\n");
+    instr.push_str("    today (gives today's date)\n");
+    instr.push_str("    today-<n> (gives a date n days before today)\n");
+    instr.push_str("    today+<n> (gives a date n days after today)");
     println!("{}", instr);
 }

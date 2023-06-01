@@ -32,30 +32,53 @@ impl Date {
 
     // Create a new Date from a string argument formatted like "year-month-day"
     pub fn new_from_string(date_str: &str) -> Result<Date, String> {
-        let mut date = Date::new();
-        let parts: Vec<&str> = date_str.split("-").collect();
-        if parts.len() == 3 {
-            let year: u16;
-            match parts[0].parse::<u16>() {
-                Ok(x) => year = x,
-                Err(_) => return Err(String::from("Date parse error: cannot parse year")),
+        if date_str == "today" {
+            Ok(Date::new_from_today())
+        } else if date_str.starts_with("today+") || date_str.starts_with("today-") {
+            let oper: char = date_str.chars().nth(5).unwrap();
+            let mut date = Date::new_from_today();
+            let parts: Vec<&str> = date_str.split(oper).collect();
+            let extra_days: u16;
+            if parts.len() == 2 {
+                match parts[1].parse::<u16>() {
+                    Ok(x) => extra_days = x,
+                    Err(_) => return Err(format!("Date parse error: cannot parse extra days \"{}\"", parts[1])),
+                }
+            } else {
+                return Err(format!("Date parse error: cannot parse date \"{}\"", date_str));
             }
-            let month: u16;
-            match parts[1].parse::<u16>() {
-                Ok(x) => month = x,
-                Err(_) => return Err(String::from("Date parse error: cannot parse month")),
-            }
-            let day: u16;
-            match parts[2].parse::<u16>() {
-                Ok(x) => day = x,
-                Err(_) => return Err(String::from("Date parse error: cannot parse day")),
-            }
-            date.set_year(year)?;
-            date.set_month(month)?;
-            date.set_day(day)?;
+            date = match oper {
+                '+' => date.add_days(extra_days).unwrap(),
+                '-' => date.sub_days(extra_days).unwrap(),
+                _ => date,
+            };
             Ok(date)
         } else {
-            Err(String::from("Date parse error: incorrect number of seperators"))
+            let mut date = Date::new();
+            let parts: Vec<&str> = date_str.split("-").collect();
+            if parts.len() == 3 {
+                let year: u16;
+                match parts[0].parse::<u16>() {
+                    Ok(x) => year = x,
+                    Err(_) => return Err(String::from("Date parse error: cannot parse year")),
+                }
+                let month: u16;
+                match parts[1].parse::<u16>() {
+                    Ok(x) => month = x,
+                    Err(_) => return Err(String::from("Date parse error: cannot parse month")),
+                }
+                let day: u16;
+                match parts[2].parse::<u16>() {
+                    Ok(x) => day = x,
+                    Err(_) => return Err(String::from("Date parse error: cannot parse day")),
+                }
+                date.set_year(year)?;
+                date.set_month(month)?;
+                date.set_day(day)?;
+                Ok(date)
+            } else {
+                Err(String::from("Date parse error: incorrect number of seperators"))
+            }
         }
     }
 
