@@ -80,7 +80,7 @@ impl TrackerData {
             if self.data[&date].contains_key(&activity) {
                 let total_minutes = self.data[&date][&activity] + minutes;
                 if total_minutes > 60 * 24 {
-                    return Err(format!("Add error: total minutes exceeds 1,440 for {} on {}", activity, date.to_string()));
+                    return Err(format!("Add error: total minutes exceeds {} for {} on {}", 60 * 24, activity, date.to_string()));
                 }
                 activities.insert(activity, total_minutes);
             } else {
@@ -116,7 +116,7 @@ impl TrackerData {
                 }
             // If we don't already have the activity, let the user know
             } else {
-                return Err(format!("Subtract error: no minutes recorded for {} on that {}", activity, date.to_string()));
+                return Err(format!("Subtract error: no minutes recorded for {} on {}", activity, date.to_string()));
             }
         // If we don't already have the date, let the user know
         } else {
@@ -154,11 +154,9 @@ impl TrackerData {
             summary.push_str("ACTIVITY\tTOTAL TIME\tAVG TIME\n");
             for (activity, minutes) in activities {
                 let line: String;
-                if activity.len() < 8 {
-                    line = format!("{}\t\t{}\t\t{}\n", activity, minutes, minutes/num_days);
-                } else {
-                    line = format!("{}\t{}\t\t{}\n", activity, minutes, minutes/num_days);
-                }
+                let activity_tab = if activity.len() < 8 {"\t\t"} else {"\t"};
+                let minutes_tab = if minutes.to_string().len() < 8 {"\t\t"} else {"\t"};
+                line = format!("{}{}{}{}{}\n", activity, activity_tab, minutes, minutes_tab, minutes/num_days);
                 summary.push_str(&line);
             }
             Ok(summary.trim_end_matches("\n").to_string())
@@ -238,5 +236,176 @@ impl TrackerData {
             }
         }
         Ok(tracker_json)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::tracker_data::TrackerData;
+    use crate::date::Date;
+
+    #[test]
+    fn from_to_json() {
+        // Create valid data
+        let valid_json = json::object!{
+            "2023-2-1": json::object!{
+                guitar: 30,
+                school: 180
+            },
+            "2023-3-1": json::object!{
+                school: 210,
+                work: 120
+            }
+        };
+        let mut tracker_data = TrackerData::new();
+        // Use from_json and to_json methods on this data
+        assert_eq!(tracker_data.from_json(&valid_json),
+                    Ok(()));
+        assert_eq!(tracker_data.to_json(),
+                    Ok(valid_json.clone()));
+
+        // Create invalid data
+        let invalid_json = json::object!{
+            "2023-2-1": json::object!{
+                guitar: "hello"
+            },
+            "2023.3.1": json::object!{
+                school: 210,
+                work: 120
+            },
+            "2023-4-1": json::array![
+                "school",
+                60,
+                "guitar",
+                45
+            ]
+        };
+        // Use from_json on this data (should return error without changing the data)
+        assert_eq!(tracker_data.from_json(&invalid_json),
+                    Err(String::from("From JSON error: JSON cannot be interpreted as TrackerData")));
+        assert_eq!(tracker_data.to_json(),
+                    Ok(valid_json.clone()));
+    }
+
+    #[test]
+    fn add() {
+        // Create a base TrackerData object to work with
+        let valid_json = json::object!{
+            "2023-2-1": json::object!{
+                guitar: 30,
+                school: 180
+            },
+            "2023-3-1": json::object!{
+                school: 210,
+                work: 120
+            }
+        };
+        let mut tracker_data = TrackerData::new();
+        assert_eq!(tracker_data.from_json(&valid_json), Ok(()));
+
+        // Add time to an existing activity
+        let date = Date::new_from_string("2023-2-1").unwrap();
+        assert_eq!(tracker_data.add(date.clone(), String::from("guitar"), 15),
+                    Ok(()));
+        assert_eq!(tracker_data.data[&date]["guitar"],
+                    45);
+
+        // Add a new activity on an existing date
+        assert_eq!(tracker_data.add(date.clone(), String::from("work"), 180),
+                    Ok(()));
+        assert_eq!(tracker_data.data[&date]["work"],
+                    180);
+
+        // Add a new activity on a new date
+        let new_date = Date::new_from_string("2023-4-1").unwrap();
+        assert_eq!(tracker_data.add(new_date.clone(), String::from("school"), 60),
+                    Ok(()));
+        assert_eq!(tracker_data.data[&new_date]["school"],
+                    60);
+
+        // Try to add more than a day's worth of time to an activity
+        assert_eq!(tracker_data.add(new_date.clone(), String::from("school"), 1440),
+                    Err(String::from("Add error: total minutes exceeds 1440 for school on 2023-4-1")));
+    }
+
+    #[test]
+    fn subtract() {
+        // Create a base TrackerData object to work with
+        let valid_json = json::object!{
+            "2023-2-1": json::object!{
+                guitar: 30,
+                school: 180
+            },
+            "2023-3-1": json::object!{
+                school: 210,
+                work: 120
+            }
+        };
+        let mut tracker_data = TrackerData::new();
+        assert_eq!(tracker_data.from_json(&valid_json), Ok(()));
+
+        // Subtract time from an existing activity
+        let date = Date::new_from_string("2023-2-1").unwrap();
+        assert_eq!(tracker_data.subtract(date.clone(), String::from("guitar"), 15),
+                    Ok(()));
+        assert_eq!(tracker_data.data[&date]["guitar"],
+                    15);
+
+        // Subtract all time from an existing activity (it should no longer exist in the TrackerData)
+        assert_eq!(tracker_data.subtract(date.clone(), String::from("school"), 200),
+                    Ok(()));
+        assert_eq!(tracker_data.data[&date].contains_key(&String::from("school")),
+                    false);
+
+        // Try to subtract time from a non-existent activity on an existing date
+        assert_eq!(tracker_data.subtract(date.clone(), String::from("work"), 30),
+                    Err(String::from("Subtract error: no minutes recorded for work on 2023-2-1")));
+
+        // Try to subtract time from a non-existent activity on a non-existent date
+        let new_date = Date::new_from_string("2023-4-1").unwrap();
+        assert_eq!(tracker_data.subtract(new_date.clone(), String::from("work"), 30),
+                    Err(String::from("Subtract error: no activities recorded for 2023-4-1")));
+    }
+
+    #[test]
+    fn summarize() {
+        // Create a TrackerData object to work with
+        let valid_json = json::object!{
+            "2023-2-1": json::object!{
+                guitar: 30,
+                school: 180
+            },
+            "2023-3-1": json::object!{
+                school: 210,
+            }
+        };
+        let mut tracker_data = TrackerData::new();
+        assert_eq!(tracker_data.from_json(&valid_json), Ok(()));
+
+        // Summarize a valid date range
+        let date1 = Date::new_from_string("2023-2-1").unwrap();
+        let date2 = Date::new_from_string("2023-4-1").unwrap();
+        let summary1 = "Summary from 2023-2-1 to 2023-4-1:
+
+ACTIVITY\tTOTAL TIME\tAVG TIME
+guitar\t\t30\t\t15
+school\t\t390\t\t195";
+        let summary2 = "Summary from 2023-2-1 to 2023-4-1:
+
+ACTIVITY\tTOTAL TIME\tAVG TIME
+school\t\t390\t\t195
+guitar\t\t30\t\t15";
+        let summarize_result = tracker_data.summarize(date1.clone(), date2.clone());
+        assert!(summarize_result.clone() == Ok(String::from(summary1)) ||
+                summarize_result.clone() == Ok(String::from(summary2)));
+
+        // Try to summarize an invalid date range
+        assert_eq!(tracker_data.summarize(date2.clone(), date1.clone()),
+                    Err(String::from("Summarize error: end date 2023-2-1 is before start date 2023-4-1")));
+        
+        // Try to summarize a date range with no data
+        let date3 = Date::new_from_string("2023-5-1").unwrap();
+        assert_eq!(tracker_data.summarize(date2.clone(), date3.clone()),
+                    Err(String::from("Summarize error: no data for 2023-4-1 to 2023-5-1")));
     }
 }
